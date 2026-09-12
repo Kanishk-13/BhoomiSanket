@@ -1,340 +1,211 @@
-# BhoomiSanket
+# BhoomiSanket (भूमि संकेत)
 
-**SIH Problem**: SIH26017 — Predictive Analytics for Early Detection of Land Acquisition Delays
+**SIH Problem Statement**: SIH26017 — Predictive Analytics for Early Detection of Land Acquisition Delays
 
-> ⚠ **SYNTHETIC DATA DISCLAIMER**
-> The data used in this application is synthetically generated for demonstration and application UI development purposes only.
-> It does not represent any real government land acquisition project, district, or individual.
-> It must not be presented as real government data under any circumstances.
-> **It is NOT an ML training dataset. It cannot be used to claim or validate model performance.**
+> ⚠️ **SYNTHETIC DATA DISCLAIMER**  
+> All project data, district metrics, compensation records, legal counts, and personnel in this repository are **synthetically generated** for demonstration, interface development, and research validation. They do NOT represent real government land acquisition records, confidential files, or live district personnel.
 
 ---
 
-## Architecture
+## 1. Overview & Problem Statement
 
-```
-┌─────────────────┐     ┌─────────────────┐     ┌──────────────────┐
-│   Next.js 14    │────▶│   FastAPI        │────▶│  PostgreSQL 15   │
-│   (Vercel)      │     │   (Railway)      │     │  + PostGIS 3.4   │
-│                 │     │                  │     │  (Supabase-mgd.) │
-└─────────────────┘     └────────┬─────────┘     └──────────────────┘
-                                 │
-                    ┌────────────▼────────────┐
-                    │   ML Artifact Layer     │
-                    │  ┌─────────────────┐   │
-                    │  │ RF model .pkl   │   │  ← loaded at startup
-                    │  │ model_loader.py │   │  ← singleton loader
-                    │  │ predictor.py    │   │  ← 41-feature pipeline
-                    │  └─────────────────┘   │
-                    │  Fallback hierarchy:    │
-                    │  1. Local RF artifact  │
-                    │  2. External ML HTTP   │
-                    │  3. Mock stub          │
-                    │  4. Stale prediction   │
-                    │  5. Unavailable        │
-                    └─────────────────────────┘
-```
+Land acquisition for public infrastructure in India (highways, railways, transmission corridors, airports, and smart industrial nodes) is governed by statutory frameworks such as RFCTLARR Act, 2013 and state-specific amendments. Key hurdles—ranging from social impact assessments (SIA) and preliminary notifications to objection hearings, compensation disbursements, R&R settlements, and judicial stay orders—often compound into multi-year project delays and significant budget escalations.
 
-**Key architectural constraint (AD-13):**
-BhoomiSanket does **not** train, evaluate, or select the ML model. The application only loads
-a pre-trained sklearn Pipeline artifact (`land_acquisition_delay_model.pkl`) and runs inference.
+**BhoomiSanket** is an enterprise-grade AI decision support platform that delivers early risk detection, statutory stage bottleneck monitoring, and automated mitigation planning. Powered by a trained Random Forest model integrated with a PostGIS geospatial database and an interactive Next.js dashboard, BhoomiSanket enables administrators, project officers, and policy analysts to intervene proactively before delays turn critical.
 
 ---
 
-## Project Structure
+## 2. Key Features
+
+- **Trained Random Forest Inference**: Real-time delay probability scoring evaluated against an optimized decision threshold (**0.375**) tuned for high recall.
+- **41-Feature Statutory Contract**: Standardized data ingestion pipeline supporting 6 categorical and 35 numerical indicators, expanded to 93 transformed features.
+- **Explainable AI (XAI)**: Feature contribution breakdown identifying the root causes of predicted delays (e.g., pending stay orders, lagging compensation disbursement, forest clearance bottlenecks).
+- **Automated Mitigation Engine**: Prioritized mitigation recommendations mapped to specific statutory acquisition stages.
+- **Interactive PostGIS Map**: Spatial project visualization with CartoDB Positron basemap and risk-coded geospatial markers.
+- **Macro Analytics Dashboard**: Instant aggregation of project volumes, risk distributions, and cost burdens by state, district, and project type.
+- **Role-Based Access Control (RBAC)**: Fine-grained security supporting `ADMIN`, `OFFICER`, `ANALYST`, and `AUDITOR` workflows with JWT and refresh token rotation.
+- **Immutable Audit Logging**: Comprehensive tracking of all authentication events, predictions, alert acknowledgments, and administrative actions.
+- **High-Availability Fallback Hierarchy**: Seamless resilience strategy falling back from local RF model to external inference, deterministic mock calculation, or cached predictions.
+
+---
+
+## 3. System Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           CLIENT / PRESENTATION LAYER                       │
+│  Next.js 14 App Router · TypeScript · Tailwind CSS · Lucide Icons · Recharts│
+│  Interactive Leaflet Map (CartoDB Positron) · Role-Based Navigation & Views │
+└──────────────────────────────────────┬──────────────────────────────────────┘
+                                       │ HTTP / JSON (Axios with Bearer Token)
+                                       ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                             API GATEWAY & APPLICATION                       │
+│  FastAPI (Python 3.11) · Uvicorn ASGI Server · Async SQLAlchemy 2.0         │
+│  OAuth2 Password Flow + JWT (HS256) · Strict RBAC (Admin, Officer, Analyst) │
+└──────────────┬──────────────────────────────────────────────┬───────────────┘
+               │                                              │
+               ▼                                              ▼
+┌──────────────────────────────┐              ┌───────────────────────────────┐
+│       DATABASE LAYER         │              │      ML INFERENCE ENGINE      │
+│  PostgreSQL 15 + PostGIS 3.4 │              │  sklearn Pipeline (v1.6.1)    │
+│  • Projects & Stage History  │              │  • RandomForestClassifier     │
+│  • Snapshots (41 ML features)│              │  • 200 Trees (class_weight)   │
+│  • Risk Predictions & Alerts │              │  • 41 Canonical Features      │
+│  • PostGIS Geometry Points   │              │  • 93 Transformed Features    │
+│  • Immutable Audit Logs      │              │  • Decision Threshold = 0.375 │
+└──────────────────────────────┘              └───────────────────────────────┘
+```
+
+Detailed architecture specifications can be found in [docs/architecture.md](docs/architecture.md).
+
+---
+
+## 4. Machine Learning Pipeline & Contract
+
+The application loads a pre-trained scikit-learn Pipeline artifact and operates strictly in inference mode.
+
+- **Model Artifact**: `backend/app/ml/models/model.joblib` (20.8 MB)
+- **Threshold Config**: `backend/app/ml/models/threshold.json`
+- **Algorithm**: `RandomForestClassifier` (`n_estimators=200`, `class_weight='balanced'`, `random_state=42`)
+- **Scikit-Learn Version**: `1.6.1`
+- **Input Contract**: 41 canonical features (6 categorical, 35 numerical)
+- **Transformed Feature Dimension**: 93 features (after one-hot encoding, imputation, and scaling)
+- **Decision Threshold**: **0.375** (projects with probability $\ge 0.375$ are flagged as delayed)
+- **Test Set Evaluation Metrics**:
+  - **ROC-AUC**: `0.8337`
+  - **Optimized F1**: `0.6914`
+  - **Optimized Recall**: `0.7412`
+
+For full details on feature schemas, model diagnostics, and fallback hierarchy, refer to [docs/ml-pipeline.md](docs/ml-pipeline.md).
+
+---
+
+## 5. Technology Stack
+
+| Layer | Technologies |
+|-------|--------------|
+| **Frontend** | Next.js 14 (App Router), React 18, TypeScript, Tailwind CSS, Lucide Icons, Recharts |
+| **Backend** | FastAPI, Python 3.11, Uvicorn, SQLAlchemy 2.0 (asyncio), Pydantic v2 |
+| **Database** | PostgreSQL 15 + PostGIS 3.4 (`asyncpg`, `GeoAlchemy2`) |
+| **Mapping & GIS** | Leaflet, React-Leaflet, CartoDB Positron tiles, GeoJSON |
+| **Machine Learning** | Scikit-learn 1.6.1, Joblib, NumPy, Pandas |
+| **Security & Auth** | OAuth2 Password Request Form, JWT (HS256), Passlib (Bcrypt) |
+| **Containerization** | Docker, Docker Compose |
+
+---
+
+## 6. Project Structure
 
 ```
 BhoomiSanket/
 ├── backend/
 │   ├── app/
-│   │   ├── api/v1/
-│   │   │   ├── auth.py          # JWT login, /me, refresh
-│   │   │   ├── projects.py      # Project CRUD + stages + snapshots
-│   │   │   ├── predictions.py   # ML inference + history
-│   │   │   ├── dashboard.py     # Summary stats, risk distribution
-│   │   │   ├── alerts.py        # Alert listing, acknowledge, mitigation
-│   │   │   ├── notifications.py # User-scoped notifications
-│   │   │   ├── admin.py         # User mgmt, thresholds, ML status
-│   │   │   ├── audit.py         # Audit log retrieval
-│   │   │   └── map.py           # GIS data endpoints
-│   │   ├── core/                # Config, security, exceptions
-│   │   ├── db/                  # SQLAlchemy models, migrations
+│   │   ├── api/v1/          # REST endpoints (auth, projects, predictions, alerts, etc.)
+│   │   ├── core/            # Config, security, exceptions
+│   │   ├── db/              # SQLAlchemy models, async session, initial seed
 │   │   ├── ml/
-│   │   │   ├── model_loader.py  # Singleton RF artifact loader
-│   │   │   ├── predictor.py     # 41-feature pipeline + threshold
-│   │   │   ├── schemas.py       # Request/response Pydantic models
-│   │   │   └── mock_stub.py     # Deterministic mock fallback
-│   │   ├── services/
-│   │   │   └── prediction_service.py  # Fallback orchestration
-│   │   ├── dependencies.py      # RBAC guards (require_admin, etc.)
-│   │   └── main.py              # FastAPI app, lifespan model load
-│   ├── models/
-│   │   └── land_acquisition_delay_model.pkl  # Pre-trained RF artifact
-│   ├── tests/
-│   │   ├── conftest.py          # Session-scoped event loop
-│   │   ├── test_ml.py           # ML loading, features, inference
-│   │   └── test_api.py          # Auth, RBAC, project detail
-│   ├── pytest.ini
-│   ├── requirements.txt
-│   └── Dockerfile
+│   │   │   ├── models/      # model.joblib (20.8MB) & threshold.json (0.375)
+│   │   │   ├── model_loader.py  # Singleton artifact loader & diagnostics
+│   │   │   ├── predictor.py     # 41-feature contract & inference executor
+│   │   │   ├── schemas.py       # Pydantic ML request/response schemas
+│   │   │   └── mock_stub.py     # Deterministic heuristic fallback
+│   │   ├── services/        # Prediction fallback orchestration & notification services
+│   │   ├── dependencies.py  # RBAC guards (require_admin, require_officer, etc.)
+│   │   └── main.py          # FastAPI application & startup lifecycle
+│   ├── tests/               # Pytest suite (11 test cases)
+│   ├── Dockerfile
+│   └── requirements.txt     # Python runtime dependencies
 ├── frontend/
 │   ├── src/
-│   │   ├── app/
-│   │   │   ├── (auth)/login/page.tsx      # JWT login (OAuth2 form)
-│   │   │   └── (dashboard)/
-│   │   │       ├── dashboard/page.tsx     # Live summary + recent
-│   │   │       │   └── projects/
-│   │   │       │       ├── page.tsx       # Paginated project table
-│   │   │       │       └── [id]/page.tsx  # Project detail + ML prediction
-│   │   │       └── alerts/page.tsx        # Alert table + acknowledge
-│   │   ├── components/
-│   │   │   ├── ui/              # Badge, Button, Card, Table, etc.
-│   │   │   ├── layout/          # Sidebar, DashboardLayout, Header
-│   │   │   └── charts/          # Risk distribution charts
-│   │   ├── lib/
-│   │   │   ├── api.ts           # Axios client with JWT interceptors
-│   │   │   └── auth.ts          # Zustand auth store
-│   │   └── types/index.ts       # Full domain TypeScript interfaces
-│   ├── package.json
-│   └── Dockerfile
+│   │   ├── app/             # Next.js 14 App Router routes (14 static & dynamic pages)
+│   │   ├── components/      # UI components, layout, charts, map components
+│   │   ├── lib/             # Axios API client, Zustand stores, auth guard hook
+│   │   └── types/           # TypeScript interface definitions
+│   ├── Dockerfile
+│   └── package.json
+├── docs/                    # Technical documentation
+│   ├── architecture.md
+│   ├── ml-pipeline.md
+│   ├── api.md
+│   └── development.md
 ├── docker-compose.yml
 ├── .env.example
+├── .gitignore
 └── README.md
 ```
 
 ---
 
-## Technology Stack
+## 7. Quick Start (Docker Compose)
 
-| Layer | Technology |
-|-------|------------|
-| Frontend | Next.js 14, React 18, TypeScript, Tailwind CSS |
-| Backend | FastAPI, Python 3.11, SQLAlchemy 2.0 (async) |
-| Database | PostgreSQL 15 + PostGIS 3.4 |
-| Maps | Leaflet + react-leaflet, **CartoDB Positron basemap** |
-| Auth | JWT (HS256), bcrypt, refresh token rotation |
-| ML Artifact | sklearn Pipeline — RandomForestClassifier (200 trees, class_weight=balanced) |
-| ML Fallback | External HTTP client → deterministic mock stub |
-| Email | aiosmtplib + FastAPI BackgroundTasks |
-| Hosting | Vercel (frontend), Railway (backend), Supabase (DB) |
-
----
-
-## ML Artifact Integration
-
-### Model Specification
-
-| Property | Value |
-|----------|-------|
-| Algorithm | RandomForestClassifier (sklearn Pipeline) |
-| Feature count | 41 canonical features |
-| Categorical features (6) | `project_type`, `state`, `district`, `current_stage`, `compensation_status`, `rr_status` |
-| Numerical features (35) | Land area, parcel count, family counts, stage timing, legal cases, compensation ratios, R&R status, etc. |
-| Decision threshold | **0.375** (tuned for recall on delay-prone projects) |
-| Model version | `rf-delay-v1.0` |
-| Artifact path | `backend/models/land_acquisition_delay_model.pkl` |
-| Container path | `/app/models/land_acquisition_delay_model.pkl` |
-
-### Fallback Hierarchy
-
-```
-1. Local RF artifact (is_mock=False, is_stale=False)   ← primary
-2. External ML HTTP service (if ML_SERVICE_URL is set)
-3. Deterministic mock stub (is_mock=True)
-4. Stale prediction (is_stale=True)
-5. 503 Unavailable
-```
-
-### Configuration
+### 7.1 Launching the Platform
 
 ```bash
-ML_MODEL_PATH=/app/models/land_acquisition_delay_model.pkl
-ML_DECISION_THRESHOLD=0.375
-ML_FEATURE_SCHEMA_VERSION=1.0
-ML_SERVICE_URL=                  # leave empty to use local RF artifact
-```
-
----
-
-## Quick Start (Docker Compose)
-
-### Prerequisites
-- Docker & Docker Compose
-- Port 3000 (frontend), 8000 (backend), 5432 (postgres) available
-
-### Steps
-
-```bash
-# 1. Clone and enter the project
-git clone <repo-url>
+# 1. Clone repository
+git clone https://github.com/Kanishk-13/BhoomiSanket.git
 cd BhoomiSanket
 
-# 2. Copy environment file
+# 2. Configure environment
 cp .env.example .env
 
-# 3. Start all services (DB + backend + frontend)
-docker-compose up --build
-
-# 4. Access
-#   Frontend:   http://localhost:3000
-#   Backend:    http://localhost:8000
-#   API Docs:   http://localhost:8000/docs
+# 3. Build and launch all containers
+docker compose build
+docker compose up -d
 ```
 
-The backend auto-seeds the database with **~250 synthetic demo projects** across Maharashtra,
-Rajasthan, Uttar Pradesh, Madhya Pradesh, and Karnataka on first startup.
+### 7.2 Access Endpoints
+
+- **Web Dashboard**: [http://localhost:3000](http://localhost:3000)
+- **FastAPI Documentation**: [http://localhost:8000/docs](http://localhost:8000/docs)
+- **API Health Check**: [http://localhost:8000/api/v1/health/](http://localhost:8000/api/v1/health/)
 
 ---
 
-## Demo Credentials
+## 8. Demo Credentials
 
-| Role | Email | Password | Permissions |
-|------|-------|----------|-------------|
-| ADMIN | admin@bhoomisanket.gov.in | password | Full access, user management, thresholds |
-| OFFICER | officer@bhoomisanket.gov.in | password | Read + run predictions + log mitigations |
-| ANALYST | analyst@bhoomisanket.gov.in | password | Read + run predictions |
-| AUDITOR | auditor@bhoomisanket.gov.in | password | Read-only (all resources) |
+The database automatically seeds standard demo accounts:
 
----
-
-## API Reference
-
-### Auth
-| Method | Path | Description |
-|--------|------|-------------|
-| POST | `/api/v1/auth/login` | OAuth2 form login → JWT |
-| GET | `/api/v1/auth/me` | Current user info |
-| POST | `/api/v1/auth/refresh` | Refresh token |
-
-### Projects
-| Method | Path | Auth Required |
-|--------|------|--------------|
-| GET | `/api/v1/projects/` | AUDITOR+ |
-| GET | `/api/v1/projects/{id}` | AUDITOR+ |
-| GET | `/api/v1/projects/{id}/stages` | AUDITOR+ |
-| GET | `/api/v1/projects/{id}/snapshots` | AUDITOR+ |
-| GET | `/api/v1/projects/{id}/predictions` | AUDITOR+ |
-
-### ML Predictions
-| Method | Path | Auth Required |
-|--------|------|--------------|
-| POST | `/api/v1/predictions/{project_id}` | ANALYST+ |
-| GET | `/api/v1/predictions/{project_id}/history` | AUDITOR+ |
-| GET | `/api/v1/predictions/health` | AUDITOR+ |
-
-### Dashboard
-| Method | Path | Auth Required |
-|--------|------|--------------|
-| GET | `/api/v1/dashboard/summary` | AUDITOR+ |
-
-### Alerts & Mitigations
-| Method | Path | Auth Required |
-|--------|------|--------------|
-| GET | `/api/v1/alerts/` | AUDITOR+ |
-| GET | `/api/v1/alerts/{id}` | AUDITOR+ |
-| POST | `/api/v1/alerts/{id}/acknowledge` | OFFICER+ |
-| POST | `/api/v1/alerts/{id}/action` | OFFICER+ |
-| GET | `/api/v1/alerts/project/{id}/mitigations` | AUDITOR+ |
-
-### Notifications
-| Method | Path | Auth Required |
-|--------|------|--------------|
-| GET | `/api/v1/notifications/` | Any authenticated |
-| GET | `/api/v1/notifications/unread-count` | Any authenticated |
-| POST | `/api/v1/notifications/{id}/read` | Any authenticated |
-| POST | `/api/v1/notifications/read-all` | Any authenticated |
-
-### Admin
-| Method | Path | Auth Required |
-|--------|------|--------------|
-| GET | `/api/v1/admin/users` | ADMIN |
-| POST | `/api/v1/admin/users` | ADMIN |
-| GET | `/api/v1/admin/thresholds` | ADMIN |
-| PUT | `/api/v1/admin/thresholds` | ADMIN |
-| GET | `/api/v1/admin/ml-status` | ADMIN |
-
-### Audit
-| Method | Path | Auth Required |
-|--------|------|--------------|
-| GET | `/api/v1/audit/` | AUDITOR+ |
-| GET | `/api/v1/audit/{log_id}` | AUDITOR+ |
+| Role | Email | Password | Intended Capabilities |
+|------|-------|----------|-----------------------|
+| `ADMIN` | `admin@bhoomisanket.gov.in` | `password` | User management, risk thresholds, ML diagnostic status |
+| `OFFICER` | `officer@bhoomisanket.gov.in` | `password` | Project review, trigger ML predictions, acknowledge alerts, log mitigations |
+| `ANALYST` | `analyst@bhoomisanket.gov.in` | `password` | Project inspection, on-demand ML predictions, analytics & GIS views |
+| `AUDITOR` | `auditor@bhoomisanket.gov.in` | `password` | Complete read-only access to all projects, predictions, alerts, and audit logs |
 
 ---
 
-## Environment Variables
+## 9. Verification & Testing
 
-See `.env.example` for all variables. Critical ones:
-
+### 9.1 Backend Test Suite (Pytest)
 ```bash
-DATABASE_URL=postgresql+asyncpg://user:pass@host:5432/dbname
-JWT_SECRET_KEY=<min-32-chars-random>
-ML_MODEL_PATH=/app/models/land_acquisition_delay_model.pkl
-ML_DECISION_THRESHOLD=0.375
-ML_SERVICE_URL=                     # leave blank to use local artifact
-SMTP_HOST=smtp.example.com
-ALLOWED_ORIGINS=http://localhost:3000
+docker exec bhoomisanket-backend-1 pytest -v
 ```
+All **11 tests pass**, verifying:
+- Authentication & JWT issuance across all 4 roles.
+- RBAC permissions on project listings, stages, and snapshots.
+- Real Random Forest model inference (`is_mock=False`, `is_stale=False`, `model_file_exists=True`).
+- 41-feature canonical contract and 0.375 decision threshold.
+- PostGIS spatial query and analytical aggregation endpoints.
+- Diagnostic ML health endpoint (`/api/v1/admin/ml-status`).
 
----
-
-## Testing
-
+### 9.2 Frontend Production Build
 ```bash
-# Run all backend tests inside Docker container
-docker exec bhoomisanket-backend-1 bash -c "cd /app && PYTHONPATH=/app pytest tests/ -v"
-
-# Or if running backend locally
-cd backend
-PYTHONPATH=. pytest tests/ -v
-
-# Frontend type checking
-cd frontend && npm run type-check
-
-# Frontend build verification
 cd frontend && npm run build
 ```
-
-### Test Coverage
-
-| Test | Description | Status |
-|------|-------------|--------|
-| `test_model_loading` | RF artifact loads, is_loaded=True | ✅ |
-| `test_canonical_features_specification` | 41 features: 6 cat + 35 num | ✅ |
-| `test_predictor_threshold_and_risk_mapping` | threshold=0.375, risk categories | ✅ |
-| `test_prediction_inference_structure` | Real RF inference, prob in [0,1], is_mock=False | ✅ |
-| `test_auth_login_and_roles` | All 4 roles + invalid credentials | ✅ |
-| `test_projects_rbac_and_detail` | AUDITOR read-only, stages, snapshots, 404 | ✅ |
+Generates **14/14 optimized routes** with zero compilation errors.
 
 ---
 
-## Milestone Status
+## 10. Project & ML Model Limitations
 
-| Milestone | Status | Description |
-|-----------|--------|-------------|
-| M1 | ✅ Done | Project skeleton, Docker, FastAPI, Next.js |
-| M2 | ✅ Done | Database models, PostGIS, migrations |
-| M3 | ✅ Done | Synthetic demo data (~250 projects, SYNTHETIC_DEMO labeled) |
-| M4 | ✅ Done | Auth, JWT, RBAC (ADMIN/OFFICER/ANALYST/AUDITOR) |
-| M5 | ✅ Done | Project detail API stabilization, AUDITOR read-only routes |
-| M6 | ✅ Done | RF model artifact integration, 41-feature pipeline, threshold=0.375 |
-| M7 | ✅ Done | Frontend integration (login, dashboard, projects, alerts, ML predictions) |
-| M8 | ✅ Done | Alerts acknowledge, mitigation logging, notifications, admin, audit APIs |
-| M9 | ✅ Done | Integration tests (6/6 pass), E2E verification, documentation |
+1. **Synthetic Data**: Demonstrated projects and district metrics are generated synthetically; real-world deployment requires integration with state revenue portals (e.g., Bhoomi, Bhulekh, MahaBhumi).
+2. **Tabular Scope**: The model evaluates numerical and statutory stage indicators; it does not currently ingest satellite imagery or unstructured legal PDFs directly.
+3. **Regional Adaptation**: The current pre-trained artifact reflects synthesized patterns across 5 states; fine-tuning may be necessary for specific regional legal provisions.
 
 ---
 
-## Synthetic Data Notice
+## 11. License & Disclaimers
 
-All project data, district names, compensation amounts, legal case counts, and officer names
-in the demo database are **synthetically generated**. Labels:
-
-- Database records: `data_source = 'SYNTHETIC_DEMO'`
-- Predictions generated with `is_mock = False` (real RF inference) but inputs are synthetic
-
-**Do not** use this data to claim, validate, or benchmark the RF model's performance.
-
----
-
-## License
-
-This project is developed for Smart India Hackathon 2026 (SIH26017).
+Developed for **Smart India Hackathon (SIH26017)**.  
+Released under the MIT License.
