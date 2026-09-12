@@ -27,6 +27,7 @@ class AuditLogResponse(BaseModel):
         from_attributes = True
 
 
+@router.get("", response_model=List[AuditLogResponse], include_in_schema=False)
 @router.get("/", response_model=List[AuditLogResponse])
 async def list_audit_logs(
     page: int = Query(1, ge=1),

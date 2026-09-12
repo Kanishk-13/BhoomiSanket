@@ -48,7 +48,11 @@ services:
     env_file:
       - .env
     environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:8000
+      # INTERNAL_API_URL: used server-side by Next.js rewrites to proxy to backend container
+      # (within Docker network, 'backend' hostname resolves to the backend service)
+      - INTERNAL_API_URL=http://backend:8000
+      # NEXT_PUBLIC_API_URL: used by the browser; requests go to /api/* which Next.js proxies
+      - NEXT_PUBLIC_API_URL=http://localhost:3000
     depends_on:
       - backend
 

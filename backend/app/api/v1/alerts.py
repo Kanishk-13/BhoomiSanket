@@ -47,6 +47,7 @@ class MitigationResponse(BaseModel):
         from_attributes = True
 
 
+@router.get("", response_model=List[AlertResponse], include_in_schema=False)
 @router.get("/", response_model=List[AlertResponse])
 async def list_alerts(
     risk_category: Optional[str] = None,

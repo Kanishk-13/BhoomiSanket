@@ -151,6 +151,7 @@ def apply_project_filters(query, latest_pred, state, district, project_type, ris
     return query
 
 
+@router.get("", response_model=ProjectListResponse, include_in_schema=False)
 @router.get("/", response_model=ProjectListResponse)
 async def list_projects(
     page: int = Query(1, ge=1),
