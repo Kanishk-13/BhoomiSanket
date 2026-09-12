@@ -127,7 +127,7 @@ class ProjectListResponse(BaseModel):
     total_pages: int
 
 
-def apply_project_filters(query, state, district, project_type, risk_category, status, search):
+def apply_project_filters(query, latest_pred, state, district, project_type, risk_category, status, search):
     """Apply filters to project query."""
     if state:
         query = query.where(Project.state.ilike(f"%{state}%"))
@@ -136,7 +136,7 @@ def apply_project_filters(query, state, district, project_type, risk_category, s
     if project_type:
         query = query.where(Project.project_type.ilike(f"%{project_type}%"))
     if risk_category:
-        query = query.where(Project.risk_category == risk_category)
+        query = query.where(latest_pred.c.risk_category == risk_category)
     if status:
         query = query.where(Project.status.ilike(f"%{status}%"))
     if search:
@@ -187,7 +187,7 @@ async def list_projects(
     ).outerjoin(latest_pred, Project.id == latest_pred.c.project_id)
     
     # Apply filters
-    query = apply_project_filters(query, state, district, project_type, risk_category, status, search)
+    query = apply_project_filters(query, latest_pred, state, district, project_type, risk_category, status, search)
     
     # Get total count
     count_query = select(func.count()).select_from(query.subquery())
