@@ -13,3 +13,10 @@ slowapi
 python-multipart
 pydantic-extra-types
 email-validator
+geoalchemy2
+scikit-learn==1.6.1
+numpy
+pandas
+joblib
+pytest
+pytest-asyncio

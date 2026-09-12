@@ -64,12 +64,20 @@ class MLResponse(BaseModel):
 
 
 class MLHealthResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="ignore")
 
     status: str
     model_version: Optional[str] = None
     feature_schema_version: Optional[str] = None
     latency_ms: Optional[int] = None
+    model_file_exists: Optional[bool] = None
+    classifier: Optional[str] = None
+    is_random_forest: Optional[bool] = None
+    n_estimators: Optional[int] = None
+    has_200_trees: Optional[bool] = None
+    input_features_count: Optional[int] = None
+    transformed_features_count: Optional[int] = None
+    decision_threshold: Optional[float] = None
 
 
 class MockMLResponse(MLResponse):

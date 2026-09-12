@@ -18,10 +18,12 @@ class Settings(BaseSettings):
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     BCRYPT_ROUNDS: int = 12
 
-    # ML Service
+    # ML Service & Inference
     ML_SERVICE_URL: str = ""
     ML_TIMEOUT_SECONDS: int = 5
     ML_FEATURE_SCHEMA_VERSION: str = "1.0"
+    ML_MODEL_PATH: str = "/app/app/ml/models/model.joblib"
+    ML_DECISION_THRESHOLD: float = 0.375
 
     # Email
     SMTP_HOST: str = ""

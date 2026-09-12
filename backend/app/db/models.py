@@ -1,13 +1,18 @@
 import uuid
-from datetime import datetime
-from sqlalchemy import Column, String, Boolean, Integer, Numeric, Date, ForeignKey, JSON, BigInteger
+from datetime import datetime, date
+from sqlalchemy import Column, String, Boolean, Integer, Numeric, Date, ForeignKey, JSON, BigInteger, Index, UniqueConstraint, func
 from sqlalchemy.orm import mapped_column, Mapped, relationship
 from sqlalchemy.dialects.postgresql import UUID, JSONB, TIMESTAMP
-from sqlalchemy.sql import func
+from sqlalchemy.sql import func as sqlalchemy_func
+from geoalchemy2 import Geography
 from app.db.database import Base
 
 class User(Base):
     __tablename__ = 'users'
+    __table_args__ = (
+        Index('ix_users_email', 'email'),
+        Index('ix_users_role', 'role'),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
@@ -22,6 +27,7 @@ class User(Base):
     mitigation_logs = relationship("MitigationLog", back_populates="user")
     alerts_acknowledged = relationship("Alert", back_populates="acknowledger")
     alert_setting = relationship("AlertSetting", back_populates="user", uselist=False, cascade="all, delete-orphan")
+    notifications = relationship("Notification", back_populates="user", cascade="all, delete-orphan")
 
 class RefreshToken(Base):
     __tablename__ = 'refresh_tokens'
@@ -37,23 +43,31 @@ class RefreshToken(Base):
 
 class Project(Base):
     __tablename__ = 'projects'
+    __table_args__ = (
+        Index('ix_projects_state_district', 'state', 'district'),
+        Index('ix_projects_current_stage', 'current_stage'),
+        Index('ix_projects_status', 'status'),
+        Index('ix_projects_risk_category', 'current_stage', 'status'),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     project_type: Mapped[str] = mapped_column(String(50), nullable=False)
     state: Mapped[str] = mapped_column(String(100), nullable=False)
     district: Mapped[str] = mapped_column(String(100), nullable=False)
+    # PostGIS geography point (SRID 4326 - WGS84)
+    location: Mapped[str] = mapped_column(Geography(geometry_type='POINT', srid=4326), nullable=True)
     latitude: Mapped[float] = mapped_column(Numeric(9, 6), nullable=True)
     longitude: Mapped[float] = mapped_column(Numeric(9, 6), nullable=True)
     land_area_ha: Mapped[float] = mapped_column(Numeric(10, 2), nullable=True)
     affected_families: Mapped[int] = mapped_column(Integer, nullable=True)
-    start_date: Mapped[datetime.date] = mapped_column(Date, nullable=False)
-    target_end_date: Mapped[datetime.date] = mapped_column(Date, nullable=False)
+    start_date: Mapped[date] = mapped_column(Date, nullable=False)
+    target_end_date: Mapped[date] = mapped_column(Date, nullable=False)
     current_stage: Mapped[str] = mapped_column(String(50), nullable=False)
     status: Mapped[str] = mapped_column(String(20), nullable=False)
     data_source: Mapped[str] = mapped_column(String(50), default='SYNTHETIC_DEMO')
-    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now())
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), server_default=sqlalchemy_func.now())
+    updated_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), server_default=sqlalchemy_func.now(), onupdate=sqlalchemy_func.now())
 
     stages = relationship("ProjectStage", back_populates="project", cascade="all, delete-orphan")
     snapshots = relationship("ProjectDataSnapshot", back_populates="project", cascade="all, delete-orphan")
@@ -78,10 +92,13 @@ class ProjectStage(Base):
 
 class ProjectDataSnapshot(Base):
     __tablename__ = 'project_data_snapshots'
+    __table_args__ = (
+        Index('ix_snapshots_project_date', 'project_id', 'snapshot_date'),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     project_id: Mapped[int] = mapped_column(ForeignKey('projects.id', ondelete='CASCADE'))
-    snapshot_date: Mapped[datetime.date] = mapped_column(Date, server_default=func.current_date())
+    snapshot_date: Mapped[date] = mapped_column(Date, server_default=sqlalchemy_func.current_date())
 
     days_in_current_stage: Mapped[int] = mapped_column(Integer, nullable=True)
     stage_overdue_days: Mapped[int] = mapped_column(Integer, nullable=True)
@@ -110,6 +127,11 @@ class ProjectDataSnapshot(Base):
 
 class RiskPrediction(Base):
     __tablename__ = 'risk_predictions'
+    __table_args__ = (
+        Index('ix_predictions_project_requested', 'project_id', 'requested_at'),
+        Index('ix_predictions_status', 'status'),
+        Index('ix_predictions_risk_category', 'risk_category'),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     project_id: Mapped[int] = mapped_column(ForeignKey('projects.id', ondelete='CASCADE'))
@@ -146,6 +168,10 @@ class MitigationLog(Base):
 
 class Alert(Base):
     __tablename__ = 'alerts'
+    __table_args__ = (
+        Index('ix_alerts_project_triggered', 'project_id', 'triggered_at'),
+        Index('ix_alerts_acknowledged', 'acknowledged_by', 'acknowledged_at'),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     project_id: Mapped[int] = mapped_column(ForeignKey('projects.id', ondelete='CASCADE'))
@@ -176,6 +202,27 @@ class AlertSetting(Base):
 
     user = relationship("User", back_populates="alert_setting")
 
+
+class Notification(Base):
+    __tablename__ = 'notifications'
+    __table_args__ = (
+        Index('ix_notifications_user_read', 'user_id', 'is_read'),
+        Index('ix_notifications_created', 'created_at'),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('users.id', ondelete='CASCADE'))
+    type: Mapped[str] = mapped_column(String(50), nullable=False)
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    message: Mapped[str] = mapped_column(String, nullable=False)
+    related_resource_type: Mapped[str] = mapped_column(String(50), nullable=True)
+    related_resource_id: Mapped[str] = mapped_column(String(100), nullable=True)
+    is_read: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), server_default=func.now())
+    read_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+
+    user = relationship("User", back_populates="notifications")
+
 class SystemConfig(Base):
     __tablename__ = 'system_config'
 
@@ -187,6 +234,11 @@ class SystemConfig(Base):
 
 class AuditLog(Base):
     __tablename__ = 'audit_logs'
+    __table_args__ = (
+        Index('ix_audit_logs_table_record', 'table_name', 'record_id'),
+        Index('ix_audit_logs_changed_by', 'changed_by'),
+        Index('ix_audit_logs_changed_at', 'changed_at'),
+    )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     table_name: Mapped[str] = mapped_column(String(100), nullable=False)

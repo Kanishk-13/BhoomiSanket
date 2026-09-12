@@ -56,12 +56,10 @@ class MLClient:
             raise MLTimeoutError()
         except httpx.ConnectError:
             raise MLServiceError("Cannot connect to ML service")
-        except MLResponse.model_validate.__self__.__class__.__pydantic_validator__:
-            raise MLInvalidResponseError("Invalid ML response schema")
         except Exception as e:
             if isinstance(e, (MLServiceError, MLTimeoutError, MLInvalidResponseError)):
                 raise
-            raise MLInvalidResponseError(f"Unexpected error: {str(e)}")
+            raise MLInvalidResponseError(f"Invalid ML response schema: {str(e)}")
 
     async def health_check(self) -> MLHealthResponse:
         if not self.base_url:

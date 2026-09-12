@@ -2,10 +2,12 @@ from typing import Generator
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from jose import jwt, JWTError
 from pydantic import ValidationError
 
 from app.db.database import get_db
+from app.db.models import User
 from app.core.config import settings
 from app.core.security import decode_token
 from app.core.exceptions import UnauthorizedError, ForbiddenError
@@ -31,8 +33,23 @@ async def get_current_user(
     user_id: str = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ):
-    # Placeholder - will be implemented in M4 with actual user lookup
-    return {"id": user_id, "role": "OFFICER"}
+    """Get current authenticated user from database."""
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    
+    if not user:
+        raise UnauthorizedError("User not found")
+    
+    if not user.is_active:
+        raise UnauthorizedError("User account is inactive")
+    
+    return {
+        "id": str(user.id),
+        "email": user.email,
+        "display_name": user.display_name,
+        "role": user.role,
+        "is_active": user.is_active
+    }
 
 
 def require_role(*allowed_roles: str):

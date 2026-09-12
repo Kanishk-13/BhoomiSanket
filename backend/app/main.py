@@ -1,3 +1,4 @@
+import logging
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -7,12 +8,20 @@ from app.core.exceptions import AppException
 from app.api.router import api_router
 from app.db.database import init_db, close_db
 from app.ml.client import ml_client
+from app.ml.model_loader import model_loader
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+)
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
     await init_db()
+    model_loader.load_model()
     yield
     # Shutdown
     await ml_client.close()

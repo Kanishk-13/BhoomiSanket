@@ -1,0 +1,5 @@
+{
+    "threshold": 0.375,
+    "model_type": "RandomForestClassifier",
+    "purpose": "Risk classification"
+}
